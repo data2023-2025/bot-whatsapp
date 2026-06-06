@@ -9,13 +9,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 app = Flask(__name__)
 
 # CONFIGURACIÓN DE SEGURIDAD Y CREDENCIALES (Vulnerabilidad Cero)
-# Se recomienda configurar TELEGRAM_ACCESS_TOKEN en las variables de entorno de Render
 TOKEN_VERIFICACION = "LLAVE_MAESTRA_ORAPC_2026"
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "TU_ACCESS_TOKEN_DE_META")
 META_PHONE_NUMBER_ID = os.environ.get("META_PHONE_NUMBER_ID", "TU_PHONE_NUMBER_ID")
 
 # ESTRUCTURA DE DIRECCIONAMIENTO INSTITUCIONAL (ORAPC 2026)
-# Los números han sido normalizados al formato internacional requerido por Meta (58...)
 DIRECTORIO_ATENCION = {
     "1": {
         "nombre": "ADMINISTRADOR",
@@ -72,7 +70,7 @@ def enviar_mensaje_whatsapp(destinatario, texto):
     """
     Se conecta con la API de Meta para enviar respuestas en formato de texto plano.
     """
-    url = f"https://graph.facebook.com/v19.0/{META_PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -111,9 +109,9 @@ def generar_menu_principal():
 
 def procesar_respuesta_usuario(texto_usuario):
     """
-    Evalúa la entrada del ciudadano y extrae la información del analista correspondiente.
+    Evalúa la entrada del ciudadano, sanitiza el texto y extrae la información.
     """
-    opcion = texto_usuario.strip()
+    opcion = str(texto_usuario).strip()
     if opcion in DIRECTORIO_ATENCION:
         datos = DIRECTORIO_ATENCION[opcion]
         respuesta = f"📞 *DETALLES DE CONTACTO - {datos['nombre']}*\n\n"
@@ -123,8 +121,7 @@ def procesar_respuesta_usuario(texto_usuario):
         respuesta += f"✉️ *Correo Electrónico:* {datos['correo']}\n\n"
         respuesta += "--- \nSi desea consultar otro departamento, envíe la palabra *MENU*."
         return respuesta
-    else:
-        return None
+    return None
 
 @app.route('/webhook', methods=['GET'])
 def verificar_webhook():
@@ -153,26 +150,30 @@ def recibir_eventos():
     logging.info(f"Payload recibido de Meta: {datos_entrantes}")
 
     try:
-        if "object" in datos_entrantes:
-            if datos_entrantes.get("entry") and datos_entrantes["entry"][0].get("changes") and datos_entrantes["entry"][0]["changes"][0].get("value") and datos_entrantes["entry"][0]["changes"][0]["value"].get("messages"):
-                
-                objeto_mensaje = datos_entrantes["entry"][0]["changes"][0]["value"]["messages"][0]
-                telefono_remitente = objeto_mensaje["from"]
-                
-                if objeto_mensaje.get("type") == "text":
-                    texto_usuario = objeto_mensaje["text"]["body"].upper().strip()
-                    logging.info(f"Mensaje de {telefono_remitente}: {texto_usuario}")
-
-                    # Lógica de respuesta discriminada
-                    respuesta_personalizada = procesar_respuesta_usuario(texto_usuario)
-                    
-                    if respuesta_personalizada:
-                        enviar_mensaje_whatsapp(telefono_remitente, respuesta_personalizada)
-                    else:
-                        # Si el mensaje no coincide con una opción numérica o pide menú, se envía el árbol completo
-                        menu_completo = generar_menu_principal()
-                        enviar_mensaje_whatsapp(telefono_remitente, menu_completo)
+        if datos_entrantes and "object" in datos_entrantes:
+            for entry in datos_entrantes.get("entry", []):
+                for change in entry.get("changes", []):
+                    value = change.get("value", {})
+                    if "messages" in value and value["messages"]:
+                        objeto_mensaje = value["messages"][0]
+                        telefono_remitente = objeto_mensaje["from"]
                         
+                        if objeto_mensaje.get("type") == "text":
+                            texto_usuario = str(objeto_mensaje["text"]["body"]).strip()
+                            logging.info(f"Mensaje de {telefono_remitente}: {texto_usuario}")
+
+                            # Control estricto de comandos globales de regreso
+                            if texto_usuario.upper() in ["MENU", "MÉNU", "HOLA", "INICIO"]:
+                                menu_completo = generar_menu_principal()
+                                enviar_mensaje_whatsapp(telefono_remitente, menu_completo)
+                            else:
+                                respuesta_personalizada = procesar_respuesta_usuario(texto_usuario)
+                                if respuesta_personalizada:
+                                    enviar_mensaje_whatsapp(telefono_remitente, respuesta_personalizada)
+                                else:
+                                    menu_completo = generar_menu_principal()
+                                    enviar_mensaje_whatsapp(telefono_remitente, menu_completo)
+                                    
             return jsonify({"status": "success"}), 200
     except Exception as error_interno:
         logging.error(f"Error en el procesamiento del flujo de eventos: {error_interno}")
@@ -181,5 +182,4 @@ def recibir_eventos():
     return jsonify({"status": "ignored"}), 200
 
 if __name__ == '__main__':
-    # Flask local utiliza puerto 5000, Gunicorn en Render utilizará puertos dinámicos asignados por la infraestructura
     app.run(host='0.0.0.0', port=5000)
