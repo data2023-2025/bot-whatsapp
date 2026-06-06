@@ -1,74 +1,28 @@
-import os
-import logging
 from flask import Flask, request, jsonify
 import requests
-
-# Configuración de logs para producción en Render
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import os
 
 app = Flask(__name__)
 
-# CONFIGURACIÓN DE SEGURIDAD Y CREDENCIALES (Vulnerabilidad Cero)
-TOKEN_VERIFICACION = "LLAVE_MAESTRA_ORAPC_2026"
-META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "TU_ACCESS_TOKEN_DE_META")
-META_PHONE_NUMBER_ID = os.environ.get("META_PHONE_NUMBER_ID", "TU_PHONE_NUMBER_ID")
+# Configuración de variables de entorno (Prioridad de seguridad)
+TOKEN_VERIFICACION = os.environ.get("TOKEN_VERIFICACION", "TU_TOKEN_DE_VERIFICACION_AQUI")
+META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "TU_META_ACCESS_TOKEN_AQUI")
+META_PHONE_NUMBER_ID = os.environ.get("META_PHONE_NUMBER_ID", "TU_PHONE_NUMBER_ID_AQUI")
 
-# ESTRUCTURA DE DIRECCIONAMIENTO INSTITUCIONAL (ORAPC 2026)
-DIRECTORIO_ATENCION = {
-    "1": {
-        "nombre": "ADMINISTRADOR",
-        "telefono": "584265748432",
-        "correo": "demonapc.online@gmail.com",
-        "finalidad": "Gestión global, reclamos de alto nivel y administración del sistema.",
-        "horario": "Lunes a Viernes - 8:00 AM a 4:00 PM"
-    },
-    "2": {
-        "nombre": "ANALISTA 07",
-        "telefono": "584265716007",
-        "correo": "dem.onapc07@gmail.com",
-        "finalidad": "Recepción de proyectos socio-críticos y atención general.",
-        "horario": "Lunes a Viernes - 8:00 AM a 2:00 PM"
-    },
-    "3": {
-        "nombre": "ANALISTA 06",
-        "telefono": "584265715868",
-        "correo": "dem.onapc06@gmail.com",
-        "finalidad": "Asesoría legal y tramitación de solicitudes de participación ciudadana.",
-        "horario": "Lunes a Viernes - 8:00 AM a 2:00 PM"
-    },
-    "4": {
-        "nombre": "ANALISTA 05",
-        "telefono": "584265715918",
-        "correo": "dem.onapc05@gmail.com",
-        "finalidad": "Procesamiento de datos estadísticos y control de gestión regional.",
-        "horario": "Lunes a Viernes - 8:00 AM a 2:00 PM"
-    },
-    "5": {
-        "nombre": "ANALISTA 02",
-        "telefono": "584265716098",
-        "correo": "dem.onapc02@gmail.com",
-        "finalidad": "Soporte técnico del Aula Virtual y atención institucional.",
-        "horario": "Lunes a Viernes - 8:00 AM a 4:00 PM"
-    },
-    "6": {
-        "nombre": "ANALISTA 08",
-        "telefono": "584265716106",
-        "correo": "dem.onapc08@gmail.com",
-        "finalidad": "Atención especializada de casos de justicia de paz comunal.",
-        "horario": "Lunes a Viernes - 8:00 AM a 2:00 PM"
-    },
-    "7": {
-        "nombre": "ANALISTA 03",
-        "telefono": "584265716049",
-        "correo": "dem.onapc03@gmail.com",
-        "finalidad": "Revisión de informes técnicos y enlaces municipales.",
-        "horario": "Lunes a Viernes - 8:00 AM a 2:00 PM"
-    }
-}
+# =====================================================================
+# LLAVE MAESTRA / CONTROL DE ADMINISTRACIÓN LOCAL
+# =====================================================================
+# Coloca aquí tu número personal (con código de país, ej: "584122012745")
+# Esto actúa como filtro de seguridad en el backend antes de llamar a Meta.
+NUMEROS_AUTORIZADOS_BACKEND = [
+    "584122012745",
+    "TU_SEGUNDO_NUMERO_DE_PRUEBA"
+]
+# =====================================================================
 
-def enviar_mensaje_whatsapp(destinatario, texto):
+def enviar_mensaje_whatsapp(telefono_destino, texto_respuesta):
     """
-    Se conecta con la API de Meta para enviar respuestas en formato de texto plano.
+    Se conecta de forma segura con la API Graph de Meta para despachar el mensaje.
     """
     url = f"https://graph.facebook.com/v25.0/{META_PHONE_NUMBER_ID}/messages"
     headers = {
@@ -78,109 +32,96 @@ def enviar_mensaje_whatsapp(destinatario, texto):
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": destinatario,
+        "to": telefono_destino,
         "type": "text",
         "text": {
             "preview_url": False,
-            "body": texto
+            "body": texto_respuesta
         }
     }
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-        logging.info(f"Respuesta de Meta enviada a {destinatario}: {response.status_code}")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error crítico al enviar mensaje vía Meta API: {e}")
-        return None
-
-def generar_menu_principal():
-    """
-    Construye de forma dinámica el menú institucional de opciones.
-    """
-    menu = "🏛️ *OFICINA DE REGISTRO Y ATENCIÓN DE PARTICIPACIÓN CIUDADANA (ORAPC)* 🏛️\n\n"
-    menu += "Bienvenido al Sistema Automatizado de Enrutamiento de Casos Judiciales e Institucionales.\n\n"
-    menu += "Por favor, seleccione el número del analista o departamento que requiere consultar:\n\n"
     
-    for clave, datos in DIRECTORIO_ATENCION.items():
-        menu += f"*{clave}* - {datos['nombre']} ({datos['correo']})\n"
+    try:
+        print(f"[BOT] Intentando enviar mensaje a {telefono_destino}...")
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"[BOT] Código de respuesta de Meta: {response.status_code}")
+        print(f"[BOT] Cuerpo de respuesta de Meta: {response.text}")
         
-    menu += "\n✍️ Responda únicamente con el *NÚMERO* de la opción deseada para ver el horario y los detalles de contacto."
-    return menu
+        if response.status_code != 200:
+            print(f"[ALERTA] Meta rechazó el envío. Verifique si el número {telefono_destino} está autorizado en el panel de Meta for Developers.")
+            
+        return response.status_code == 200
+    except Exception as e:
+        print(f"[BOT] ERROR CRÍTICO al conectar con la API de Meta: {str(e)}")
+        return False
 
-def procesar_respuesta_usuario(texto_usuario):
-    """
-    Evalúa la entrada del ciudadano, sanitiza el texto y extrae la información.
-    """
-    opcion = str(texto_usuario).strip()
-    if opcion in DIRECTORIO_ATENCION:
-        datos = DIRECTORIO_ATENCION[opcion]
-        respuesta = f"📞 *DETALLES DE CONTACTO - {datos['nombre']}*\n\n"
-        respuesta += f"📌 *Finalidad de la línea:* {datos['finalidad']}\n"
-        respuesta += f"⏰ *Horario de Atención:* {datos['horario']}\n"
-        respuesta += f"📲 *Enlace Directo WhatsApp:* wa.me/{datos['telefono']}\n"
-        respuesta += f"✉️ *Correo Electrónico:* {datos['correo']}\n\n"
-        respuesta += "--- \nSi desea consultar otro departamento, envíe la palabra *MENU*."
-        return respuesta
-    return None
+@app.route('/', methods=['GET'])
+def index():
+    return "Servidor del Bot de WhatsApp ORAPC operativo con Filtro de Seguridad.", 200
 
 @app.route('/webhook', methods=['GET'])
 def verificar_webhook():
     """
-    Punto de enlace requerido por Meta para validar la autenticidad del servidor (Handshake).
+    Validación obligatoria (Handshake) para Meta for Developers.
     """
-    mode = request.args.get('hub.mode')
-    token = request.args.get('hub.verify_token')
-    challenge = request.args.get('hub.challenge')
-
-    if mode and token:
-        if mode == 'subscribe' and token == TOKEN_VERIFICACION:
-            logging.info("Webhook verificado exitosamente con Llave Maestra.")
-            return challenge, 200
-        else:
-            logging.warning("Intento de conexión no autorizado con token inválido.")
-            return "Token de verificación inválido", 403
-    return "Faltan parámetros de configuración", 400
+    hub_mode = request.args.get('hub.mode')
+    hub_token = request.args.get('hub.verify_token')
+    hub_challenge = request.args.get('hub.challenge')
+    
+    if hub_mode == 'subscribe' and hub_token == TOKEN_VERIFICACION:
+        print("[WEBHOOK] Validación exitosa con Meta.")
+        return hub_challenge, 200
+    print("[WEBHOOK] Error de validación: Tokens no coinciden.")
+    return "Fallo de autenticación", 403
 
 @app.route('/webhook', methods=['POST'])
-def recibir_eventos():
+def recibir_webhook():
     """
-    Procesa las notificaciones en tiempo real enviadas por Meta al recibir mensajes.
+    Procesamiento del JSON entrante con tolerancia a fallos y extracción segura.
     """
-    datos_entrantes = request.get_json()
-    logging.info(f"Payload recibido de Meta: {datos_entrantes}")
+    datos = request.get_json()
+    print(f"[WEBHOOK] Payload recibido de Meta: {datos}")
+    
+    if not datos:
+        return jsonify({"status": "error", "message": "Payload vacío"}), 400
 
     try:
-        if datos_entrantes and "object" in datos_entrantes:
-            for entry in datos_entrantes.get("entry", []):
+        if "object" in datos and datos["object"] == "whatsapp_business_account":
+            for entry in datos.get("entry", []):
                 for change in entry.get("changes", []):
                     value = change.get("value", {})
-                    if "messages" in value and value["messages"]:
-                        objeto_mensaje = value["messages"][0]
-                        telefono_remitente = objeto_mensaje["from"]
+                    
+                    if "messages" in value and len(value["messages"]) > 0:
+                        mensaje_obj = value["messages"][0]
+                        telefono_remitente = mensaje_obj.get("from")
                         
-                        if objeto_mensaje.get("type") == "text":
-                            # SANITIZACIÓN ROBUSTA: Eliminamos comillas accidentales
-                            texto_usuario = str(objeto_mensaje["text"]["body"]).strip().replace("'", "").replace('"', '')
-                            logging.info(f"Mensaje limpio de {telefono_remitente}: {texto_usuario}")
-
-                            # Control estricto de comandos globales de regreso
-                            if texto_usuario.upper() in ["MENU", "MÉNU", "HOLA", "INICIO"]:
-                                menu_completo = generar_menu_principal()
-                                enviar_mensaje_whatsapp(telefono_remitente, menu_completo)
+                        # FILTRO DE SEGURIDAD INTERNO (LLAVE MAESTRA)
+                        if telefono_remitente not in NUMEROS_AUTORIZADOS_BACKEND:
+                            print(f"[SEGURIDAD] Mensaje ignorado de {telefono_remitente}: No está en la lista blanca del backend.")
+                            return jsonify({"status": "ignored", "reason": "Unauthorized number"}), 200
+                        
+                        if "text" in mensaje_obj and "body" in mensaje_obj["text"]:
+                            texto_usuario = mensaje_obj["text"]["body"].strip().upper()
+                            print(f"[BOT] Mensaje procesado de {telefono_remitente}: '{texto_usuario}'")
+                            
+                            if texto_usuario == "MENU":
+                                menú_institucional = (
+                                    "🏛️ *Bienvenido al Sistema de Atención Ciudadana de la ORAPC* 🏛️\n\n"
+                                    "Por favor, seleccione una opción respondiendo con el número correspondiente:\n\n"
+                                    "1️⃣ *Consultar estado de trámite.*\n"
+                                    "2️⃣ *Requisitos para solicitudes.*\n"
+                                    "3️⃣ *Hablar con un analista de guardia.*\n"
+                                    "4️⃣ *Horarios de atención e información institucional.*"
+                                )
+                                enviar_mensaje_whatsapp(telefono_remitente, menú_institucional)
                             else:
-                                respuesta_personalizada = procesar_respuesta_usuario(texto_usuario)
-                                if respuesta_personalizada:
-                                    enviar_mensaje_whatsapp(telefono_remitente, respuesta_personalizada)
-                                else:
-                                    menu_completo = generar_menu_principal()
-                                    enviar_mensaje_whatsapp(telefono_remitente, menu_completo)
-                                    
-            return jsonify({"status": "success"}), 200
-    except Exception as error_interno:
-        logging.error(f"Error en el procesamiento del flujo de eventos: {error_interno}")
-        return jsonify({"status": "error", "message": str(error_interno)}), 500
+                                respuesta_por_defecto = "Para desplegar las opciones institucionales, por favor escribe la palabra *MENU*."
+                                enviar_mensaje_whatsapp(telefono_remitente, respuesta_por_defecto)
+                                
+        return jsonify({"status": "success"}), 200
 
-    return jsonify({"status": "ignored"}), 200
+    except Exception as e:
+        print(f"[BOT] ERROR INTERNO al parsear el JSON: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=10000, debug=False)
