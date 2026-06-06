@@ -159,7 +159,7 @@ def recibir_eventos():
                         telefono_remitente = objeto_mensaje["from"]
                         
                         if objeto_mensaje.get("type") == "text":
-                            # SANITIZACIÓN ROBUSTA: Eliminamos comillas accidentales puestas por el usuario
+                            # SANITIZACIÓN ROBUSTA: Eliminamos comillas accidentales
                             texto_usuario = str(objeto_mensaje["text"]["body"]).strip().replace("'", "").replace('"', '')
                             logging.info(f"Mensaje limpio de {telefono_remitente}: {texto_usuario}")
 
