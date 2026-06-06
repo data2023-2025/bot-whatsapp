@@ -70,7 +70,7 @@ def enviar_mensaje_whatsapp(destinatario, texto):
     """
     Se conecta con la API de Meta para enviar respuestas en formato de texto plano.
     """
-    url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v25.0/{META_PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -159,8 +159,9 @@ def recibir_eventos():
                         telefono_remitente = objeto_mensaje["from"]
                         
                         if objeto_mensaje.get("type") == "text":
-                            texto_usuario = str(objeto_mensaje["text"]["body"]).strip()
-                            logging.info(f"Mensaje de {telefono_remitente}: {texto_usuario}")
+                            # SANITIZACIÓN ROBUSTA: Eliminamos comillas accidentales puestas por el usuario
+                            texto_usuario = str(objeto_mensaje["text"]["body"]).strip().replace("'", "").replace('"', '')
+                            logging.info(f"Mensaje limpio de {telefono_remitente}: {texto_usuario}")
 
                             # Control estricto de comandos globales de regreso
                             if texto_usuario.upper() in ["MENU", "MÉNU", "HOLA", "INICIO"]:
